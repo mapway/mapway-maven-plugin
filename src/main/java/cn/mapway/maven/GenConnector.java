@@ -17,6 +17,7 @@ import org.nutz.lang.Strings;
 
 import cn.mapway.document.helper.GwtConnextorExport;
 import cn.mapway.document.helper.JavaClassContent;
+import cn.mapway.document.helper.JavaConnextorExport;
 import cn.mapway.document.module.ApiDoc;
 
 /**
@@ -43,6 +44,10 @@ public class GenConnector extends AbstractMojo {
   @Parameter(defaultValue = "Connector", property = "className", required = true)
   private String className;
 
+  /** The class name. */
+  @Parameter(defaultValue = "gwt", property = "contype", required = true)
+  private String contype;
+
 
   /**
    * 执行goal 调用 mapway-doc-ui 生成源代码.
@@ -50,8 +55,53 @@ public class GenConnector extends AbstractMojo {
    * @throws MojoExecutionException the mojo execution exception
    */
   public void execute() throws MojoExecutionException {
-    GwtConnextorExport exportJava = new GwtConnextorExport();
     Log logger = getLog();
+    if (contype.compareTo("gwt") == 0) {
+      exportGwtConnector(logger);
+    } else if (contype.compareToIgnoreCase("java") == 0) {
+      exportJavaConnector(logger);
+    } else {
+      logger.error("unsupport connection type " + contype + " ,current support gwt java");
+    }
+
+  }
+
+  private void exportJavaConnector(Log logger) {
+    JavaConnextorExport exportJava = new JavaConnextorExport();
+
+    if (Strings.isBlank(apiUrl)) {
+      logger.info("apiurl 配置为空字符串,取消本次访问代码生成");
+      return;
+    }
+
+    // 获取 ApiDoc
+    Response res = Http.get(apiUrl);
+    if (!res.isOK()) {
+      logger.info("获取API文档信息" + apiUrl + "错误:" + res.getStatus());
+      return;
+    }
+    ApiDoc doc = Json.fromJson(ApiDoc.class, res.getReader());
+    if (doc == null) {
+      logger.info("获取API文档信息" + apiUrl + "错误:" + res.getContent());
+      return;
+    }
+
+    List<JavaClassContent> codes = exportJava.export2(doc, packageName, className);
+
+    for (JavaClassContent jcc : codes) {
+      String fileName = makePathFile(path, jcc.packageName, jcc.className);
+      logger.info("生成JavaAPI的代理接口" + className + "-->" + fileName);
+      Files.write(fileName, jcc.body);
+    }
+  }
+
+
+  /**
+   * 
+   */
+  private void exportGwtConnector(Log logger) {
+    GwtConnextorExport exportJava = new GwtConnextorExport();
+
     if (Strings.isBlank(apiUrl)) {
       logger.info("apiurl 配置为空字符串,取消本次访问代码生成");
       return;
